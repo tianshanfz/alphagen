@@ -14,7 +14,7 @@ from alphagen.data.expression import *
 from alphagen.data.parser import ExpressionParser
 from alphagen.models.linear_alpha_pool import LinearAlphaPool, MseAlphaPool
 from alphagen.rl.env.wrapper import AlphaEnv
-from alphagen.rl.policy import LSTMSharedNet
+from alphagen.rl.policy import LSTMSharedNet, TransformerSharedNet
 from alphagen.utils import reseed_everything, get_logger
 from alphagen.rl.env.core import AlphaEnvCore
 from alphagen_qlib.calculator import QLibStockDataCalculator
@@ -67,7 +67,8 @@ class CustomCallback(BaseCallback):
         verbose: int = 0,
         chat_session: Optional[InterativeSession] = None,
         llm_every_n_steps: int = 25_000,
-        drop_rl_n: int = 5
+        drop_rl_n: int = 5,
+        checkpoint_interval: int = 20480
     ):
         super().__init__(verbose)
         self.save_path = save_path
@@ -80,6 +81,8 @@ class CustomCallback(BaseCallback):
         self.llm_every_n_steps = llm_every_n_steps
         self.chat_session = chat_session
         self._drop_rl_n = drop_rl_n
+        self.checkpoint_interval = checkpoint_interval
+        self.last_checkpoint_step = 0
 
     def _on_step(self) -> bool:
         return True
@@ -95,14 +98,18 @@ class CustomCallback(BaseCallback):
         n_days = sum(calculator.data.n_days for calculator in self.test_calculators)
         ic_test_mean, rank_ic_test_mean = 0., 0.
         for i, test_calculator in enumerate(self.test_calculators, start=1):
-            ic_test, rank_ic_test = self.pool.test_ensemble(test_calculator)
+            ic_test, ir_test, rank_ic_test, rank_ir_test = self.pool.test_ensemble_with_ir(test_calculator)
             ic_test_mean += ic_test * test_calculator.data.n_days / n_days
             rank_ic_test_mean += rank_ic_test * test_calculator.data.n_days / n_days
             self.logger.record(f'test/ic_{i}', ic_test)
+            self.logger.record(f'test/ir_{i}', ir_test)
             self.logger.record(f'test/rank_ic_{i}', rank_ic_test)
+            self.logger.record(f'test/rank_ir_{i}', rank_ir_test)
         self.logger.record(f'test/ic_mean', ic_test_mean)
         self.logger.record(f'test/rank_ic_mean', rank_ic_test_mean)
-        self.save_checkpoint()
+        if self.num_timesteps - self.last_checkpoint_step >= self.checkpoint_interval:
+            self.save_checkpoint()
+            self.last_checkpoint_step = self.num_timesteps
 
     def save_checkpoint(self):
         path = os.path.join(self.save_path, f'{self.num_timesteps}_steps')
@@ -157,7 +164,7 @@ class CustomCallback(BaseCallback):
 
 def run_single_experiment(
     seed: int = 0,
-    instruments: str = "csi300",
+    instruments: str = "all",
     pool_capacity: int = 10,
     steps: int = 200_000,
     alphagpt_init: bool = False,
@@ -167,7 +174,7 @@ def run_single_experiment(
     llm_replace_n: int = 3
 ):
     reseed_everything(seed)
-    initialize_qlib("~/.qlib/qlib_data/cn_data")
+    initialize_qlib("~/.qlib/qlib_data/cn_data_2024h1")
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
     print(f"""[Main] Starting training process
@@ -207,7 +214,10 @@ def run_single_experiment(
         ("2012-01-01", "2021-12-31"),
         ("2022-01-01", "2022-06-30"),
         ("2022-07-01", "2022-12-31"),
-        ("2023-01-01", "2023-06-30")
+        ("2023-01-01", "2023-06-30"),
+        ("2023-07-01", "2023-12-31"),
+        ("2024-01-01", "2024-06-30"),
+        ("2024-07-01", "2024-12-31")
     ]
     datasets = [get_dataset(*s) for s in segments]
     calculators = [QLibStockDataCalculator(d, target) for d in datasets]
@@ -253,17 +263,19 @@ def run_single_experiment(
         "MlpPolicy",
         env,
         policy_kwargs=dict(
-            features_extractor_class=LSTMSharedNet,
+            features_extractor_class=TransformerSharedNet,
             features_extractor_kwargs=dict(
-                n_layers=2,
-                d_model=128,
+                n_head=12,
+                d_model=768,
+                n_encoder_layers=12,
+                d_ffn=3072,
                 dropout=0.1,
                 device=device,
             ),
         ),
         gamma=1.,
         ent_coef=0.01,
-        batch_size=128,
+        batch_size=512,
         tensorboard_log="./out/tensorboard",
         device=device,
         verbose=1,
@@ -278,7 +290,7 @@ def run_single_experiment(
 def main(
     random_seeds: Union[int, Tuple[int]] = 0,
     pool_capacity: int = 20,
-    instruments: str = "csi300",
+    instruments: str = "all",
     alphagpt_init: bool = False,
     use_llm: bool = False,
     drop_rl_n: int = 10,

@@ -159,6 +159,10 @@ class LinearAlphaPool(AlphaPoolBase, metaclass=ABCMeta):
     def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float]:
         return calculator.calc_pool_all_ret(self.exprs[:self.size], self.weights)      # type: ignore
 
+    def test_ensemble_with_ir(self, calculator: AlphaCalculator) -> Tuple[float, float, float, float]:
+        return calculator.calc_pool_all_ret_with_ir(self.exprs[:self.size], self.weights)
+
+
     def evaluate_ensemble(self) -> float:
         if self.size == 0:
             return 0.
