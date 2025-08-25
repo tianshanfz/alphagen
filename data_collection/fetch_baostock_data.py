@@ -164,7 +164,7 @@ class DataManager:
             )
         return self._adjust_factors.xs(code, level="code").astype(float)    # type: ignore
 
-    def _download_stock_data_job(self, code: str, data: pd.Series) -> None:
+    def _download_stock_data_job(self, code: str, data: pd.Series, sz_index_df: pd.Series) -> None:
         fields_str = ",".join(self._fields)
         numeric_fields = self._fields.copy()
         numeric_fields.pop(0)
@@ -197,14 +197,39 @@ class DataManager:
         df["volume"] /= df[self._adjust_type]
         df["vwap"] = df["amount"] / df["volume"]
         df = df.set_index("date")
+        df = df.join(sz_index_df, how='left')  # 按日期合并深证成指数据
         df.to_pickle(f"{self._save_path}/k_data/{code}.pkl")
 
     def _download_stock_data(self) -> None:
         print("Download stock data")
         os.makedirs(f"{self._save_path}/k_data", exist_ok=True)
+           # 1. 首先获取深证成指数据作为市场基准
+        def get_sz_index_data():
+            return bs.query_history_k_data_plus(
+                "sz.399001",
+                "date,open,high,low,close,amount",
+                start_date='2005-01-01',
+                #end_date=datetime.now().strftime("%Y-%m-%d"),
+                frequency="d",
+                adjustflag="3"  # 指数通常不复权
+            )
+            print(sz_query)
+    
+        # 获取深证成指数据并预处理
+        sz_index_df = self._query_as_data_frame(get_sz_index_data)
+        sz_index_df = sz_index_df.rename(columns={
+            'open': 'sz_open',
+            'high': 'sz_high',
+            'low': 'sz_low',
+            'close': 'sz_close',
+            'amount': 'sz_amount',
+        })
+
+        sz_index_df['date'] = pd.to_datetime(sz_index_df['date'])
+        sz_index_df = sz_index_df.set_index('date')
         self._parallel_foreach(
             self._download_stock_data_job,
-            [dict(code=code, data=data)
+            [dict(code=code, data=data, sz_index_df=sz_index_df)
              for code, data in self._basic_info.iterrows()],
             need_to_login_baostock=True
         )

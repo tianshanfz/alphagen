@@ -101,8 +101,6 @@ class CustomCallback(BaseCallback):
             ic_test, ir_test, rank_ic_test, rank_ir_test = self.pool.test_ensemble_with_ir(test_calculator)
             ic_test_mean += ic_test * test_calculator.data.n_days / n_days
             rank_ic_test_mean += rank_ic_test * test_calculator.data.n_days / n_days
-            self.logger.record(f'test/ic_{i}', ic_test)
-            self.logger.record(f'test/ir_{i}', ir_test)
             self.logger.record(f'test/rank_ic_{i}', rank_ic_test)
             self.logger.record(f'test/rank_ir_{i}', rank_ir_test)
         self.logger.record(f'test/ic_mean', ic_test_mean)
@@ -164,7 +162,7 @@ class CustomCallback(BaseCallback):
 
 def run_single_experiment(
     seed: int = 0,
-    instruments: str = "all",
+    instruments: str = "csi300",
     pool_capacity: int = 10,
     steps: int = 200_000,
     alphagpt_init: bool = False,
@@ -175,6 +173,7 @@ def run_single_experiment(
 ):
     reseed_everything(seed)
     initialize_qlib("~/.qlib/qlib_data/cn_data_2024h1")
+
 
     llm_replace_n = 0 if not use_llm else llm_replace_n
     print(f"""[Main] Starting training process
@@ -211,9 +210,9 @@ def run_single_experiment(
         )
 
     segments = [
-        ("2012-01-01", "2021-12-31"),
-        ("2022-01-01", "2022-06-30"),
-        ("2022-07-01", "2022-12-31"),
+        ("2012-01-01", "2022-12-31"),
+      #  ("2022-01-01", "2022-06-30"),
+      #  ("2022-07-01", "2022-12-31"),
         ("2023-01-01", "2023-06-30"),
         ("2023-07-01", "2023-12-31"),
         ("2024-01-01", "2024-06-30"),
@@ -290,7 +289,7 @@ def run_single_experiment(
 def main(
     random_seeds: Union[int, Tuple[int]] = 0,
     pool_capacity: int = 20,
-    instruments: str = "all",
+    instruments: str = "csi1000",
     alphagpt_init: bool = False,
     use_llm: bool = False,
     drop_rl_n: int = 10,
