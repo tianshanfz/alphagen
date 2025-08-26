@@ -213,7 +213,6 @@ class DataManager:
                 frequency="d",
                 adjustflag="3"  # 指数通常不复权
             )
-            print(sz_query)
     
         # 获取深证成指数据并预处理
         sz_index_df = self._query_as_data_frame(get_sz_index_data)
@@ -225,7 +224,7 @@ class DataManager:
             'amount': 'sz_amount',
         })
 
-        sz_index_df['date'] = pd.to_datetime(sz_index_df['date'])
+       # sz_index_df['date'] = pd.to_datetime(sz_index_df['date'])
         sz_index_df = sz_index_df.set_index('date')
         self._parallel_foreach(
             self._download_stock_data_job,

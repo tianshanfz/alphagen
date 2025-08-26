@@ -13,7 +13,12 @@ class FeatureType(IntEnum):
     VOLUME = 4
     VWAP = 5
     TURN = 6
-
+    SZ_CLOSE=7
+    SZ_AMOUNT=8
+    SZ_OPEN=9
+    SZ_HIGH=10
+    SZ_LOW=11
+    SZ_HIGH=12
 _DEFAULT_QLIB_DATA_PATH = "~/.qlib/qlib_data/cn_data"
 _QLIB_INITIALIZED = False
 
